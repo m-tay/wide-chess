@@ -1,4 +1,3 @@
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -42,6 +41,7 @@ public class GameManager : MonoBehaviour
     private double a_pos = -3.85;
     private double one_pos = -3.85;
     private double square_size = 1.1;
+    private double piece_size = 3;
     private double left_x_bound;
     private double right_x_bound;
     private double top_y_bound;
@@ -54,6 +54,7 @@ public class GameManager : MonoBehaviour
     // game logic tracking
     private string colourToMove = "white";
     private GameObject selectedPiece;
+    public GameObject lastMovedPiece;
 
 
 
@@ -76,6 +77,7 @@ public class GameManager : MonoBehaviour
 
         // calculate bounds
         left_x_bound = a_pos - (square_size/2);
+        Debug.Log(left_x_bound);
         right_x_bound = a_pos - (square_size/2) + (square_size*8);
         top_y_bound = one_pos - (square_size/2)+ (square_size*8);
         bottom_y_bound = one_pos - (square_size/2);
@@ -91,6 +93,7 @@ public class GameManager : MonoBehaviour
         string position = getPositionFromCoords(mousePosWorld);
         string pieceColour = "";
 
+        checkForWideTakes();
 
         // highlights cells with active players pieces
         if(!pieceSelected) {
@@ -109,6 +112,21 @@ public class GameManager : MonoBehaviour
                         selectedPiece = hit.collider.gameObject;
 
                         activeHighlightObject = Instantiate(pieceSelectHighlight, getCoordsFromPosition(position), Quaternion.identity);
+
+                        // WIDE PIECE MANAGEMENT
+                        int pieceWidth = selectedPiece.GetComponent<PieceScript>().getWidth();
+                        if(pieceWidth > 1) {
+                            // make activeHighlightObject scale wider by multiple of pieceWidth
+                            Vector3 highlightScale = activeHighlightObject.transform.localScale; 
+                            highlightScale.x = highlightScale.x * pieceWidth;
+                            activeHighlightObject.transform.localScale = highlightScale;
+
+                            // make wider highlight match position of wider piece
+                            activeHighlightObject.transform.position = selectedPiece.transform.position;
+                            
+                            
+
+                        }
 
                         // if mouse clicked
                         if(Input.GetMouseButtonUp(0)) {
@@ -167,6 +185,69 @@ public class GameManager : MonoBehaviour
         }
     }
 
+    void checkForWideTakes() {
+
+        // if lastMovedPiece colliding with anything
+        if(lastMovedPiece != null) {
+            BoxCollider2D lastMovedPieceCollider = lastMovedPiece.GetComponent<BoxCollider2D>();
+            for(int i = 0; i < pieces.Count; i++) {
+                BoxCollider2D pieceCollider = pieces[i].GetComponent<BoxCollider2D>();
+                if (lastMovedPieceCollider.IsTouching(pieceCollider)) {
+                    Debug.Log("lastMovedPiece colliding with " + pieces[i].name);
+
+                    Destroy(pieces[i]);
+                    pieces.RemoveAt(i);
+
+                    // GET WIDE
+                    if(lastMovedPiece.GetComponent<PieceScript>().getWidth() < 8) {
+                        Vector3 localScale = lastMovedPiece.transform.localScale;
+                        localScale.x = localScale.x + (float)piece_size;
+                        lastMovedPiece.transform.localScale = localScale;
+
+                        lastMovedPiece.GetComponent<PieceScript>().increaseWidth();
+
+                        // make lastMovedPiece move left by squaresize/2
+                        if(piece.GetComponent<PieceScript>().getWidth() % 2 != 1) {
+                            Vector3 positionVector = lastMovedPiece.transform.position;
+                            positionVector.x -= (float)square_size / 2;
+                            lastMovedPiece.transform.position = positionVector;
+                        }
+                    }
+
+                    boundsCheckCorrection();
+                    break; // ugh
+                }
+            }
+        }
+    }
+
+    void boundsCheckCorrection() {
+            // handle x bounds checking and shifting back in position
+        if(lastMovedPiece != null) {
+            // calculate left-most x position of lastMovedPiece
+            int pieceWidth = lastMovedPiece.GetComponent<PieceScript>().getWidth();
+            float left_x_edge = lastMovedPiece.transform.position.x - ((float)square_size * (float)(piece_size))/2;
+            float right_x_edge = lastMovedPiece.transform.position.x + ((float)square_size * (float)(piece_size))/2;
+            float tolerance = 0.2f;
+
+            Vector3 lastMovedPiecePosition = lastMovedPiece.transform.position;
+
+            Debug.Log("left_x_edge is " + left_x_edge);
+            Debug.Log("left_x_bound is " + left_x_bound);
+
+            if(left_x_edge < left_x_bound - tolerance) {
+                Debug.Log("moving back to " + (left_x_bound + ((float)square_size * (float)piece_size)));
+                lastMovedPiecePosition.x = ((float)left_x_bound + ((float)square_size * (float)piece_size));
+                lastMovedPiece.transform.position = lastMovedPiecePosition;
+            } 
+                
+            if (right_x_edge + 0.2 > right_x_bound + tolerance) {
+                lastMovedPiecePosition.x = ((float)right_x_bound - ((float)square_size * (float)piece_size));
+                lastMovedPiece.transform.position = lastMovedPiecePosition;
+            }
+        }
+    }
+
     void initBoard()
     {
         // initialize the array of pieces
@@ -190,21 +271,38 @@ public class GameManager : MonoBehaviour
     public void movePiece(GameObject piece, string position)
     {
         piece.transform.position = getCoordsFromPosition(position);
+        lastMovedPiece = piece;
 
-        // check if piece is taking a piece
-        RaycastHit2D hit = Physics2D.Raycast(piece.transform.position, Vector2.zero);
-        if(hit.collider != null && hit.collider.gameObject.tag == "piece") {
-            // Debug.Log("Taking " + hit.collider.gameObject.name);
-            // remove reference to piece from pieces
-            for(int i = 0; i < pieces.Count; i++) {
-                if(pieces[i] == hit.collider.gameObject) {
-                    pieces.RemoveAt(i);
+        if(piece.GetComponent<PieceScript>().getWidth() == 1) {
+            // check if piece is taking a piece
+            RaycastHit2D hit = Physics2D.Raycast(piece.transform.position, Vector2.zero);
+            if(hit.collider != null && hit.collider.gameObject.tag == "piece") {
+                Debug.Log("1 wide, taking " + hit.collider.gameObject.name);
+
+                // remove reference to piece from pieces
+                for(int i = 0; i < pieces.Count; i++) {
+                    if(pieces[i] == hit.collider.gameObject) {
+                        pieces.RemoveAt(i);
+                    }
                 }
-            }
 
-            Destroy(hit.collider.gameObject);
-        }
+                // destroy the piece
+                Destroy(hit.collider.gameObject);
 
+                // GET WIDE
+                Vector3 localScale = piece.transform.localScale;
+                localScale.x = localScale.x + (float)piece_size;
+                piece.transform.localScale = localScale;
+
+                piece.GetComponent<PieceScript>().increaseWidth();
+
+                // make piece move left by squaresize/2
+                Vector3 positionVector = piece.transform.position;
+                positionVector.x -= (float)square_size / 2;
+                piece.transform.position = positionVector;
+
+                }
+        } 
 
         finishTurn();
     }
