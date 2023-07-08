@@ -203,15 +203,17 @@ public class GameManager : MonoBehaviour
                         Vector3 localScale = lastMovedPiece.transform.localScale;
                         localScale.x = localScale.x + (float)piece_size;
                         lastMovedPiece.transform.localScale = localScale;
-
-                        lastMovedPiece.GetComponent<PieceScript>().increaseWidth();
-
-                        // make lastMovedPiece move left by squaresize/2
+                        
+                          // make lastMovedPiece move left by squaresize/2
                         if(piece.GetComponent<PieceScript>().getWidth() % 2 != 1) {
                             Vector3 positionVector = lastMovedPiece.transform.position;
                             positionVector.x -= (float)square_size / 2;
                             lastMovedPiece.transform.position = positionVector;
                         }
+
+                        lastMovedPiece.GetComponent<PieceScript>().increaseWidth();
+
+                      
                     }
 
                     boundsCheckCorrection();
@@ -219,30 +221,34 @@ public class GameManager : MonoBehaviour
                 }
             }
         }
+
+                    boundsCheckCorrection();
+
     }
 
     void boundsCheckCorrection() {
             // handle x bounds checking and shifting back in position
         if(lastMovedPiece != null) {
+            Debug.Log("boundCheckCorrection called");
             // calculate left-most x position of lastMovedPiece
             int pieceWidth = lastMovedPiece.GetComponent<PieceScript>().getWidth();
-            float left_x_edge = lastMovedPiece.transform.position.x - ((float)square_size * (float)(piece_size))/2;
-            float right_x_edge = lastMovedPiece.transform.position.x + ((float)square_size * (float)(piece_size))/2;
+            float left_x_edge = lastMovedPiece.transform.position.x - (float)(square_size * lastMovedPiece.GetComponent<PieceScript>().getWidth())/2;
+            float right_x_edge = lastMovedPiece.transform.position.x + (float)(square_size * lastMovedPiece.GetComponent<PieceScript>().getWidth())/2;
             float tolerance = 0.2f;
 
             Vector3 lastMovedPiecePosition = lastMovedPiece.transform.position;
 
-            Debug.Log("left_x_edge is " + left_x_edge);
-            Debug.Log("left_x_bound is " + left_x_bound);
+            Debug.Log("left_x_edge (of piece) is " + left_x_edge);
+            Debug.Log("left_x_bound (of map) is " + left_x_bound);
 
             if(left_x_edge < left_x_bound - tolerance) {
-                Debug.Log("moving back to " + (left_x_bound + ((float)square_size * (float)piece_size)));
-                lastMovedPiecePosition.x = ((float)left_x_bound + ((float)square_size * (float)piece_size));
+                Debug.Log("moving back to " + (left_x_bound + (float)(square_size * lastMovedPiece.GetComponent<PieceScript>().getWidth())/2));
+                lastMovedPiecePosition.x = ((float)left_x_bound + (float)(square_size * lastMovedPiece.GetComponent<PieceScript>().getWidth())/2);
                 lastMovedPiece.transform.position = lastMovedPiecePosition;
             } 
                 
             if (right_x_edge + 0.2 > right_x_bound + tolerance) {
-                lastMovedPiecePosition.x = ((float)right_x_bound - ((float)square_size * (float)piece_size));
+                lastMovedPiecePosition.x = ((float)right_x_bound - (float)(square_size * lastMovedPiece.GetComponent<PieceScript>().getWidth())/2);
                 lastMovedPiece.transform.position = lastMovedPiecePosition;
             }
         }
