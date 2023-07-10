@@ -1,5 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
+using System;
+
 
 public class GameManager : MonoBehaviour
 {
@@ -55,6 +57,8 @@ public class GameManager : MonoBehaviour
     private string colourToMove = "white";
     private GameObject selectedPiece;
     public GameObject lastMovedPiece;
+    private bool canCheckWideTakes = true;
+    private int wideCheckCount = 0;
 
 
 
@@ -77,7 +81,6 @@ public class GameManager : MonoBehaviour
 
         // calculate bounds
         left_x_bound = a_pos - (square_size/2);
-        Debug.Log(left_x_bound);
         right_x_bound = a_pos - (square_size/2) + (square_size*8);
         top_y_bound = one_pos - (square_size/2)+ (square_size*8);
         bottom_y_bound = one_pos - (square_size/2);
@@ -138,8 +141,15 @@ public class GameManager : MonoBehaviour
 
                             // get the piece that was clicked
                             GameObject pieceClicked = hit.collider.gameObject;
+
+                            List<string> allPositions = getAllPositions(pieceClicked);
                             string piecePosition = getPositionFromCoords(pieceClicked.transform.position);
-                            highlightMoves(pieceClicked.name, piecePosition);
+
+
+                            // for each in allPositions
+                            foreach(string pos in allPositions) {
+                                highlightMoves(pieceClicked.name, pos);
+                            }
 
                             // disable collisions on all pieces
                             foreach(GameObject obj in pieces) {
@@ -173,6 +183,11 @@ public class GameManager : MonoBehaviour
             if (hit.collider != null && hit.collider.gameObject.tag == "moveHighlight") {
                 // if mouse clicked
                 if(Input.GetMouseButtonUp(0)) {
+                        // re-enable wide checks
+                        canCheckWideTakes = true;
+                        wideCheckCount = 0;
+
+
                         // re-enable collisions on all pieces
                         foreach(GameObject obj in pieces) {
                             obj.GetComponent<BoxCollider2D>().enabled = true;
@@ -186,50 +201,71 @@ public class GameManager : MonoBehaviour
     }
 
     void checkForWideTakes() {
+        if(canCheckWideTakes) {
+    // if lastMovedPiece colliding with anything
+            if(lastMovedPiece != null) {
+                BoxCollider2D lastMovedPieceCollider = lastMovedPiece.GetComponent<BoxCollider2D>();
+                for(int i = 0; i < pieces.Count; i++) {
+                    BoxCollider2D pieceCollider = pieces[i].GetComponent<BoxCollider2D>();
+                    if (lastMovedPieceCollider.IsTouching(pieceCollider)) {
+                        // Debug.Log("lastMovedPiece colliding with " + pieces[i].name);
 
-        // if lastMovedPiece colliding with anything
-        if(lastMovedPiece != null) {
-            BoxCollider2D lastMovedPieceCollider = lastMovedPiece.GetComponent<BoxCollider2D>();
-            for(int i = 0; i < pieces.Count; i++) {
-                BoxCollider2D pieceCollider = pieces[i].GetComponent<BoxCollider2D>();
-                if (lastMovedPieceCollider.IsTouching(pieceCollider)) {
-                    Debug.Log("lastMovedPiece colliding with " + pieces[i].name);
+                        Destroy(pieces[i]);
+                        pieces.RemoveAt(i);
 
-                    Destroy(pieces[i]);
-                    pieces.RemoveAt(i);
+                        // GET WIDE
+                        if(lastMovedPiece.GetComponent<PieceScript>().getWidth() < 8) {
+                            Vector3 localScale = lastMovedPiece.transform.localScale;
+                            localScale.x = localScale.x + (float)piece_size;
+                            lastMovedPiece.transform.localScale = localScale;
+                            
+                            // make lastMovedPiece move left by squaresize/2
+                            if(piece.GetComponent<PieceScript>().getWidth() % 2 != 1) {
+                                Vector3 positionVector = lastMovedPiece.transform.position;
+                                positionVector.x -= (float)square_size / 2;
+                                lastMovedPiece.transform.position = positionVector;
+                            }
 
-                    // GET WIDE
-                    if(lastMovedPiece.GetComponent<PieceScript>().getWidth() < 8) {
-                        Vector3 localScale = lastMovedPiece.transform.localScale;
-                        localScale.x = localScale.x + (float)piece_size;
-                        lastMovedPiece.transform.localScale = localScale;
+                            lastMovedPiece.GetComponent<PieceScript>().increaseWidth();
+
                         
-                          // make lastMovedPiece move left by squaresize/2
-                        if(piece.GetComponent<PieceScript>().getWidth() % 2 != 1) {
-                            Vector3 positionVector = lastMovedPiece.transform.position;
-                            positionVector.x -= (float)square_size / 2;
-                            lastMovedPiece.transform.position = positionVector;
                         }
 
-                        lastMovedPiece.GetComponent<PieceScript>().increaseWidth();
-
-                      
+                        boundsCheckCorrection();
+                        break; // ugh
                     }
-
-                    boundsCheckCorrection();
-                    break; // ugh
                 }
-            }
-        }
 
-                    boundsCheckCorrection();
+                // Debug.Log("pieceWidth" + lastMovedPiece.GetComponent<PieceScript>().getWidth());
+                // Debug.Log("iece.GetComponent<PieceScript>().getWidth() % 2 == 1: " + (lastMovedPiece.GetComponent<PieceScript>().getWidth() % 2 == 1));
+                if(lastMovedPiece.GetComponent<PieceScript>().getWidth() % 2 == 1) {
+                    alignToGrid(lastMovedPiece);
+                }
+
+                if(lastMovedPiece.GetComponent<PieceScript>().getWidth() % 2 != 1) {
+                    alignToGridEven(lastMovedPiece);
+                }
+
+
+            }
+
+
+
+                        boundsCheckCorrection();
+
+            wideCheckCount++;
+            if(wideCheckCount > 8000) { canCheckWideTakes = false; }
+        }
+        
+
+        
 
     }
 
     void boundsCheckCorrection() {
             // handle x bounds checking and shifting back in position
         if(lastMovedPiece != null) {
-            Debug.Log("boundCheckCorrection called");
+            // Debug.Log("boundCheckCorrection called");
             // calculate left-most x position of lastMovedPiece
             int pieceWidth = lastMovedPiece.GetComponent<PieceScript>().getWidth();
             float left_x_edge = lastMovedPiece.transform.position.x - (float)(square_size * lastMovedPiece.GetComponent<PieceScript>().getWidth())/2;
@@ -238,11 +274,11 @@ public class GameManager : MonoBehaviour
 
             Vector3 lastMovedPiecePosition = lastMovedPiece.transform.position;
 
-            Debug.Log("left_x_edge (of piece) is " + left_x_edge);
-            Debug.Log("left_x_bound (of map) is " + left_x_bound);
+            // Debug.Log("left_x_edge (of piece) is " + left_x_edge);
+            // Debug.Log("left_x_bound (of map) is " + left_x_bound);
 
             if(left_x_edge < left_x_bound - tolerance) {
-                Debug.Log("moving back to " + (left_x_bound + (float)(square_size * lastMovedPiece.GetComponent<PieceScript>().getWidth())/2));
+                // Debug.Log("moving back to " + (left_x_bound + (float)(square_size * lastMovedPiece.GetComponent<PieceScript>().getWidth())/2));
                 lastMovedPiecePosition.x = ((float)left_x_bound + (float)(square_size * lastMovedPiece.GetComponent<PieceScript>().getWidth())/2);
                 lastMovedPiece.transform.position = lastMovedPiecePosition;
             } 
@@ -274,16 +310,114 @@ public class GameManager : MonoBehaviour
         }
     }
 
+    public void alignToGrid(GameObject piece) {
+        // Debug.Log("checking grid alignment");
+        // generate valid x positions for pieces
+        float[] validXPositions = new float[8];
+        validXPositions[0] = (float)a_pos;
+        for(int i = 1; i < 8; i++) {
+            validXPositions[i] = (float)(a_pos + (float)(i * square_size));
+
+            // round validXPositions[i] to 2 decimal places
+            validXPositions[i] = (float)Math.Round(validXPositions[i], 2);
+        }
+
+        float piece_x_pos = piece.transform.position.x;
+
+        // check if piece is aligned
+        bool aligned = false;
+        for(int i = 0; i < 8; i++) {
+            if(piece_x_pos == validXPositions[i]) {
+                aligned = true;
+                // Debug.Log("aligned piece found");
+                break;
+            }
+        }
+
+        if(!aligned) {
+            float closest_x = (float)a_pos;
+            Debug.Log("piece not aligned");
+            for(int i = 0; i < 8; i++) {
+                if(piece_x_pos >= validXPositions[i]) {
+                    // Debug.Log("piece_x_pos is " + piece_x_pos);
+                    // Debug.Log("validXPositions[i] is " + validXPositions[i]);
+                    closest_x = validXPositions[i];
+
+                }
+            }
+
+            // Debug.Log("closest_x is " + closest_x);
+            piece.transform.position = new Vector3(closest_x, piece.transform.position.y, piece.transform.position.z);
+        }
+
+    }
+
+    public void alignToGridEven(GameObject piece) {
+        float a_pos_even = (float)a_pos + (float)(square_size/2);
+        // Debug.Log("checking grid alignment even");
+        // generate valid x positions for pieces
+        float[] validXPositions = new float[8];
+        validXPositions[0] = a_pos_even;
+        for(int i = 1; i < 8; i++) {
+            validXPositions[i] = (float)(a_pos_even + (float)(i * square_size));
+
+            // round validXPositions[i] to 2 decimal places
+            validXPositions[i] = (float)Math.Round(validXPositions[i], 2);
+        }
+
+        float piece_x_pos = piece.transform.position.x;
+
+        // check if piece is aligned
+        bool aligned = false;
+        for(int i = 0; i < 8; i++) {
+            if(piece_x_pos == validXPositions[i]) {
+                aligned = true;
+                // Debug.Log("aligned piece found even");
+                break;
+            }
+        }
+
+        if(!aligned) {
+            float closest_x = (float)a_pos_even;
+            // Debug.Log("piece not aligned even");
+            for(int i = 0; i < 8; i++) {
+                if(piece_x_pos >= validXPositions[i]) {
+                    // Debug.Log("piece_x_pos is even " + piece_x_pos);
+                    // Debug.Log("validXPositions[i] is even " + validXPositions[i]);
+                    closest_x = validXPositions[i];
+
+                }
+            }
+
+            // Debug.Log("closest_x is even " + closest_x);
+            piece.transform.position = new Vector3(closest_x, piece.transform.position.y, piece.transform.position.z);
+        }
+
+    }
+
+
     public void movePiece(GameObject piece, string position)
     {
-        piece.transform.position = getCoordsFromPosition(position);
+
+        // get piece width
+        int pieceWidth = piece.GetComponent<PieceScript>().getWidth();
+        if(piece.GetComponent<PieceScript>().getWidth() % 2 != 1) {
+            Vector3 newPosition = getCoordsFromPosition(position);  
+            newPosition.x -= (float)square_size / 2;
+            piece.transform.position = newPosition;
+
+        } else {
+            piece.transform.position = getCoordsFromPosition(position);
+        }
+
+
         lastMovedPiece = piece;
 
         if(piece.GetComponent<PieceScript>().getWidth() == 1) {
             // check if piece is taking a piece
             RaycastHit2D hit = Physics2D.Raycast(piece.transform.position, Vector2.zero);
             if(hit.collider != null && hit.collider.gameObject.tag == "piece") {
-                Debug.Log("1 wide, taking " + hit.collider.gameObject.name);
+                // Debug.Log("1 wide, taking " + hit.collider.gameObject.name);
 
                 // remove reference to piece from pieces
                 for(int i = 0; i < pieces.Count; i++) {
@@ -306,6 +440,7 @@ public class GameManager : MonoBehaviour
                 Vector3 positionVector = piece.transform.position;
                 positionVector.x -= (float)square_size / 2;
                 piece.transform.position = positionVector;
+                Debug.Log("this happened");
 
                 }
         } 
@@ -1277,6 +1412,41 @@ public class GameManager : MonoBehaviour
             default:
                 return null;
         }
+    }
+
+    List<string> getAllPositions(GameObject obj) {
+        List<string> positions = new List<string>();
+
+        Vector3 position = obj.transform.position;
+        string objName = obj.name;
+        Vector3 scanPosition = position;
+        scanPosition.x = (float)a_pos;
+
+        // scan left to right to see what spaces the object is taking up
+        for (int i = 0; i < 8; i++) {
+            // Debug.Log("Scanning " + scanPosition);
+
+            // raycast to see if there is a piece at this position
+            RaycastHit2D hit = Physics2D.Raycast(scanPosition, Vector2.zero, 0f, LayerMask.GetMask("pieces"));
+            if (hit.collider != null) {
+                // Debug.Log("Got a hit on " + hit.collider.gameObject.name);
+                if (hit.collider.gameObject.name == objName) {
+                    positions.Add(getPositionFromCoords(scanPosition));
+                    // Debug.Log("Found piece at " + getPositionFromCoords(scanPosition));
+                }
+            }
+
+
+            scanPosition.x = (float)(scanPosition.x + square_size);
+        }
+
+        // iterate though positions
+        foreach (string pos in positions) {
+            // Debug.Log("Piece is in position: " + pos);
+        }        
+
+
+        return positions;
     }
 
 }
